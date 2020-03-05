@@ -1,0 +1,67 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Figure 8: Hierarchical generalised additive model for the region of Värmland
+```{r}
+Series<-read_tsv("Vdr 88-17 ANC300 till Claudia_bara_langa.txt")
+Series%>%
+  filter(SWEREFID=="6559832-380439" | SWEREFID=="6581519-383565" | SWEREFID=="6585489-420879" | SWEREFID=="6586310-399589" | SWEREFID=="6591038-411956"| SWEREFID=="6635190-525485" |
+           SWEREFID=="6538630-449064" | SWEREFID=="6585343-440992"| SWEREFID=="6652237-421507")%>%
+  mutate(Sulphate=`SO4* mekv/l`, date = paste(Yr, Mo, Day, sep="-") %>% 
+           ymd())%>%
+  mutate(datedecimal=decimal_date(date))->Series_V
+```
+
+Hierarchical model:
+```{r}
+Sulphate_modGS <- gam(Sulphate ~ s(datedecimal, k=5, m=2) + s(datedecimal, as.factor(SWEREFID) , k=5, bs="fs", m=2), data=Series_V, method="REML")
+```
+
+Make predictions to use in plot for overall trend:
+```{r}
+newdata<-data.frame(Sulphate=TOC_V$Sulphate, SWEREFID="", datedecimal=TOC_V$datedecimal)
+newdata$overall<-predict(Sulphate_modGS, newdata=newdata, type="iterms", se.fit=TRUE)
+newdata$overallfit<-newdata$overall$fit[,1]
+newdata$overall.se<-newdata$overall$se.fit[,1]
+```
+
+Plot overall trend estimate with uncertainty
+```{r}
+newdata%>%
+  ggplot(aes(x=datedecimal, y=overallfit+Sulphate_modGS$coefficients[1]))+
+  geom_point()+
+  geom_ribbon(aes(ymin=overallfit+Sulphate_modGS$coefficients[1]-2*overall.se,
+                  ymax=overallfit+Sulphate_modGS$coefficients[1]+2*overall.se), alpha=0.25, lwd=2)+
+  ylab("Overall trend in sulphate (mekv/l)")+
+  xlab("Year")+
+  ylim(0,0.15)+
+  theme_bw()+
+  theme(text = element_text(size=18))
+```
+
+Make prediction for spline deviation of specific sites
+
+```{r}
+newdata2<-data.frame(Sulphate=TOC_V$Sulphate, SWEREFID=TOC_V$SWEREFID, datedecimal=TOC_V$datedecimal)
+newdata2$overall<-predict(Sulphate_modGS, newdata=newdata2, type="terms")
+```
+
+Plot individual trends for specific sites:
+```{r}
+newdata2%>%
+  ggplot(aes(x=datedecimal, y=overall[,2]+newdata$overall$fit[,1]+Sulphate_modGS$coefficients[1], col=as.factor(SWEREFID)))+
+  geom_point()+
+  ylab("Site specific trends")+
+  xlab("Year")+
+  labs(col = "Site")+
+  ylim(0,0.15)+
+  theme_bw()+
+  theme(legend.position="bottom", text = element_text(size=18))
+```
+
