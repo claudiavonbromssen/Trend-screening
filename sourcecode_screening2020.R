@@ -1,16 +1,19 @@
-library(tidyverse)
-library(readxl)
-library(lubridate)
-library(mgcv)
+if (!("pacman" %in% rownames(installed.packages()))) {install.packages("pacman")}
+pacman::p_load(tidyverse,
+               readxl,
+               lubridate,
+               mgcv,
+               gratia,
+               furrr,
+               tictoc,
+               magrittr,
+               beepr,
+               RcppRoll,
+               scales)
+
 #library(janitor)
-library(gratia) #fderiv
-library(furrr) #future_map
 #library(broom)
-library(tictoc)
-library(magrittr) #%$%
-library(beepr) #beep when done
-library(RcppRoll)
-library(scales)
+
 select <- dplyr::select
 periods <- function(data,
                     variable,
