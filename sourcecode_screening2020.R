@@ -69,7 +69,7 @@ model <- function(x, formula, knots, opt = "nlminb") {
 }
 
 model_gam <- function(x, formula, knots) {
-  y <- gam(l
+  y <- gam(
     data = x,
     formula = formula,
     family = gaussian(link = link),
