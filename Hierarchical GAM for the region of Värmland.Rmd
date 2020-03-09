@@ -7,6 +7,11 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+Read functions for screeningmodels and screening plots
+```{r}
+source("sourcecode_screening2020.R")
+```
+
 Figure 8: Hierarchical generalised additive model for the region of Värmland
 ```{r}
 Series<-read_tsv("Vdr 88-17 ANC300 till Claudia_bara_langa.txt")
