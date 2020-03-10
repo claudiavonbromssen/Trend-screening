@@ -25,7 +25,7 @@ Sulphate_modGS <- gam(Sulphate ~ s(datedecimal, k=5, m=2) + s(datedecimal, as.fa
 
 Make predictions to use in plot for overall trend:
 ```{r}
-newdata<-data.frame(Sulphate=TOC_V$Sulphate, SWEREFID="", datedecimal=Series_V$datedecimal)
+newdata<-data.frame(Sulphate=Series_V$Sulphate, SWEREFID="", datedecimal=Series_V$datedecimal)
 newdata$overall<-predict(Sulphate_modGS, newdata=newdata, type="iterms", se.fit=TRUE)
 newdata$overallfit<-newdata$overall$fit[,1]
 newdata$overall.se<-newdata$overall$se.fit[,1]
@@ -48,7 +48,7 @@ newdata%>%
 Make prediction for spline deviation of specific sites
 
 ```{r}
-newdata2<-data.frame(Sulphate=TOC_V$Sulphate, SWEREFID=TOC_V$SWEREFID, datedecimal=Series_V$datedecimal)
+newdata2<-data.frame(Sulphate=Series_V$Sulphate, SWEREFID=Series_V$SWEREFID, datedecimal=Series_V$datedecimal)
 newdata2$overall<-predict(Sulphate_modGS, newdata=newdata2, type="terms")
 ```
 
