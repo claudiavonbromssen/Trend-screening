@@ -1,5 +1,6 @@
 if (!("pacman" %in% rownames(installed.packages()))) {install.packages("pacman")}
-pacman::p_load(tidyverse,
+pacman::p_load(pacman,
+               tidyverse,
                readxl,
                lubridate,
                mgcv,
@@ -57,7 +58,7 @@ trim_tails <- function(range = c(-Inf, Inf)) {
 ## from: https://stackoverflow.com/questions/44628130/ggplot2-dealing-with-extremes-values-by-setting-a-continuous-color-scale
 # by: Brian W. Davis
 
-model <- function(x, formula, knots, opt = "nlminb") {
+model <- function(x, link = "identity", formula, knots, opt = "nlminb") {
   y <- gamm(
     data = x,
     formula = formula,
@@ -71,7 +72,7 @@ model <- function(x, formula, knots, opt = "nlminb") {
   return(y)
 }
 
-model_gam <- function(x, formula, knots) {
+model_gam <- function(x, link = "identity", formula, knots) {
   y <- gam(
     data = x,
     formula = formula,
@@ -83,7 +84,7 @@ model_gam <- function(x, formula, knots) {
   return(y)
 }
 
-model_gam_t <- function(x, formula, knots) {
+model_gam_t <- function(x, link = "identity", formula, knots) {
   y <- gam(
     data = x,
     formula = formula,
@@ -95,20 +96,20 @@ model_gam_t <- function(x, formula, knots) {
   return(y)
 }
 
-modeling <- function(x, link = link, autocor = autocor, tdist = tdist) {
+modeling <- function(x, link = "identity", autocor = autocor, tdist = tdist) {
   # family <- if(log == TRUE){gaussian(link="log")}else{gaussian()}
     formula <- variable ~ s(decimaldate, k = round(nrow(x) / 2)) + s(decimal_during, bs = "cc", k = 13)
     knots <- list(decimal_during = seq(0, 1, length=13))
   x <- drop_na(x, variable)
   if(autocor == TRUE)
-    {out <- try(model(x, formula, knots))
+    {out <- try(model(x, link, formula, knots))
   if ("try-error" %in% class(out)) {
-    out <- try(model(x, formula, knots, opt = "optim"))
+    out <- try(model(x, link, formula, knots, opt = "optim"))
   }
   if ("try-error" %in% class(out)) {
-    out <- model_gam(x, formula, knots)
-  }}else{if(tdist == T){out <- model_gam_t(x, formula, knots)}
-    else{out <- model_gam(x, formula, knots)}}
+    out <- model_gam(x, link, formula, knots)
+  }}else{if(tdist == T){out <- model_gam_t(x, link, formula, knots)}
+    else{out <- model_gam(x, link, formula, knots)}}
 
   return(out)
 }
@@ -162,7 +163,8 @@ screeningmodeling <- function(.data,
     ungroup() %>%
     mutate(
       fit = future_map(data, possibly(~ modeling(.x,
-                                                 link = link, autocor = autocor, tdist = tdist),
+                                                 link = link,
+                                                 autocor = autocor, tdist = tdist),
                                       otherwise = NA_integer_,
                                       quiet = F),
                        .progress = T),
