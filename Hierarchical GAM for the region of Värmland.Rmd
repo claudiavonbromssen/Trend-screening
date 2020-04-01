@@ -7,61 +7,97 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+Read functions for screeningmodels and screening plots
+```{r}
+source("sourcecode_screening2020.R")
+```
+
 Figure 8: Hierarchical generalised additive model for the region of Värmland
 ```{r}
-Series<-read_tsv("Vdr 88-17 ANC300 till Claudia_bara_langa.txt")
+Series<-read_tsv("Vdr 88-17 ANC300.txt")
 Series%>%
   filter(SWEREFID=="6559832-380439" | SWEREFID=="6581519-383565" | SWEREFID=="6585489-420879" | SWEREFID=="6586310-399589" | SWEREFID=="6591038-411956"| SWEREFID=="6635190-525485" |
            SWEREFID=="6538630-449064" | SWEREFID=="6585343-440992"| SWEREFID=="6652237-421507")%>%
-  mutate(Sulphate=`SO4* mekv/l`, date = paste(Yr, Mo, Day, sep="-") %>% 
+  mutate(Sulfate=`SO4* mekv/l`, date = paste(Yr, Mo, Day, sep="-") %>% 
            ymd())%>%
   mutate(datedecimal=decimal_date(date))->Series_V
 ```
 
 Hierarchical model:
 ```{r}
-Sulphate_modGS <- gam(Sulphate ~ s(datedecimal, k=5, m=2) + s(datedecimal, as.factor(SWEREFID) , k=5, bs="fs", m=2), data=Series_V, method="REML")
+Sulfate_modGS <- gam(Sulfate ~ s(datedecimal, k=5, m=2) + s(datedecimal, as.factor(SWEREFID) , k=5, bs="fs", m=2), data=Series_V, method="REML")
 ```
 
 Make predictions to use in plot for overall trend:
 ```{r}
-newdata<-data.frame(Sulphate=Series_V$Sulphate, SWEREFID="", datedecimal=Series_V$datedecimal)
-newdata$overall<-predict(Sulphate_modGS, newdata=newdata, type="iterms", se.fit=TRUE)
+newdata<-data.frame(Sulfate=Series_V$Sulfate, SWEREFID="", datedecimal=Series_V$datedecimal)
+newdata$overall<-predict(Sulfate_modGS, newdata=newdata, type="iterms", se.fit=TRUE)
 newdata$overallfit<-newdata$overall$fit[,1]
 newdata$overall.se<-newdata$overall$se.fit[,1]
 ```
 
-Plot overall trend estimate with uncertainty
+Plot overall trend estimate with uncertainty (Figure 8, left)
 ```{r}
 newdata%>%
-  ggplot(aes(x=datedecimal, y=overallfit+Sulphate_modGS$coefficients[1]))+
+  ggplot(aes(x=datedecimal, y=overallfit+Sulfate_modGS$coefficients[1]))+
   geom_point()+
-  geom_ribbon(aes(ymin=overallfit+Sulphate_modGS$coefficients[1]-2*overall.se,
-                  ymax=overallfit+Sulphate_modGS$coefficients[1]+2*overall.se), alpha=0.25, lwd=2)+
-  ylab("Overall trend in sulphate (mekv/l)")+
+  geom_ribbon(aes(ymin=overallfit+Sulfate_modGS$coefficients[1]-2*overall.se,
+                  ymax=overallfit+Sulfate_modGS$coefficients[1]+2*overall.se), alpha=0.25, lwd=2)+
+  ylab("Overall trend in sulfate")+
   xlab("Year")+
   ylim(0,0.15)+
   theme_bw()+
-  theme(text = element_text(size=18))
+  theme(text = element_text(size=15))
 ```
 
 Make prediction for spline deviation of specific sites
 
 ```{r}
-newdata2<-data.frame(Sulphate=Series_V$Sulphate, SWEREFID=Series_V$SWEREFID, datedecimal=Series_V$datedecimal)
-newdata2$overall<-predict(Sulphate_modGS, newdata=newdata2, type="terms")
+newdata2<-data.frame(Sulfate=Series_V$Sulfate, SWEREFID=Series_V$SWEREFID, datedecimal=Series_V$datedecimal)
+newdata2$overall<-predict(Sulfate_modGS, newdata=newdata2, type="terms")
 ```
 
-Plot individual trends for specific sites:
+Plot individual trends for specific sites (Figure 8, right):
 ```{r}
 newdata2%>%
-  ggplot(aes(x=datedecimal, y=overall[,2]+newdata$overall$fit[,1]+Sulphate_modGS$coefficients[1], col=as.factor(SWEREFID)))+
+  ggplot(aes(x=datedecimal, y=overall[,2]+newdata$overall$fit[,1]+Sulfate_modGS$coefficients[1], col=as.factor(SWEREFID)))+
   geom_point()+
-  ylab("Site specific trends")+
+  ylab("Site-specific trends")+
   xlab("Year")+
   labs(col = "Site")+
   ylim(0,0.15)+
   theme_bw()+
   theme(legend.position="bottom", text = element_text(size=18))
+```
+
+
+Trend screening models for Sulfate, pH, TOC, absorbance, alkalinity, ANC, BC, Chloride, Nitrite and nitrate and total phosphorus
+
+```{r}
+Series_V%>%
+  rename(TOC=`TOC (mg/l)`, Absorbance=`Abs._F (420nm/5cm)`, Alkalinity=`Alk/Acid (mekv/l)`, ANC=`ANC mekv/l`, BC=`BC* mekv/l`, Chloride=`Cl (mekv/l)`, `Nitrite and nitrate`=`NO2+NO3-N (?g/l)`, `Total phosphorus`=`Tot-P (?g/l)`) %>% 
+  select(Sulfate,pH, TOC, Absorbance, Alkalinity, ANC, BC, Chloride, `Nitrite and nitrate`, `Total phosphorus`,  date , SWEREFID)%>%
+  drop_na(Sulfate) %>% 
+  pivot_longer(cols=c("Sulfate", "pH", "TOC", "Absorbance", "Alkalinity", "ANC", "BC", "Chloride", "Nitrite and nitrate", "Total phosphorus")) %>% 
+  group_by(SWEREFID,name) %>% 
+  mutate(n=length(date)) %>% 
+  screeningmodeling(values=  value,
+                    datevar = date, 
+                    #seasonal = F, # removed, it is a bad idea
+                    link = "identity", 
+                    conf.type = "conf",
+                    beep = TRUE, 
+                    tdist = F,
+                    autocor = TRUE,
+                    SWEREFID, name) -> 
+  screenmodel_V_out
+```
+
+Screening plots for the region of Värmland (Figure 9)
+
+```{r}
+screenmodel_V_out%>%
+  plot_screeningtrends(sorting = name, y_id = name, wrappingvar = SWEREFID)
+
 ```
 
