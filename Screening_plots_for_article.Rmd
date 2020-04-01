@@ -17,16 +17,16 @@ Additionally janitor is needed?
 
 Read data and create needed variable Date from year, month and day. Keep pH, sulphate, Date and stationID (SWEREFID), rename sulphate and restructure data into long format. Run function screeningmodeling. This can take a while depending on how many series need to be processed and how complex the fitting process is. If unsure start with a subset. 
 ```{r}
-read_tsv("Vdr 88-17 ANC300 till Claudia_bara_langa.txt") %>%
+read_tsv("Vdr 88-17 ANC300.txt") %>%
   mutate(Date = paste(Yr, Mo, Day, sep="-") %>% 
            ymd())%>%
   select(`SO4* mekv/l`,pH, Date , SWEREFID)%>%
   #filter(SWEREFID=="7120198-789375") %>%
   #rename(Alkalinitet=`Alk/Acid (mekv/l)`)
-  rename(Sulphate=`SO4* mekv/l`) %>% 
+  rename(Sulfate=`SO4* mekv/l`) %>% 
   #clean_names() %>% 
-  drop_na(Sulphate) %>% 
-  pivot_longer(cols=c("Sulphate", "pH")) %>% 
+  drop_na(Sulfate) %>% 
+  pivot_longer(cols=c("Sulfate", "pH")) %>% 
   #drop_na(value) %>% 
  # mutate(date = paste(year, month, 1, sep="-") %>% 
   #         ymd()) %>% 
@@ -44,6 +44,11 @@ read_tsv("Vdr 88-17 ANC300 till Claudia_bara_langa.txt") %>%
   screenmodel_out
 ```
 
+In case the outputfile should be saved as rds file we can use the command below. This create a quite large file.
+```{r}
+#saveRDS(screenmodel_out,"screenmodel_out.rds")
+```
+
 The created tibble screenmodel_out contains all necessary information to create the different types of plots. 
 
 Plots for an individual series:
@@ -58,7 +63,7 @@ Sulphate, Alsterälven (Figure 2, right)
 ```{r}
 screenmodel_out%>%
   filter(SWEREFID=="6585489-420879", name=="Sulphate")%>%
-plot_individual_trend(y = "Sulphate")
+plot_individual_trend(y = "Sulfate")
 ```
 
 
@@ -93,18 +98,18 @@ screenmodel_out %>% filter(name=="pH")%>% mutate(order=desc(as.numeric(str_sub(S
 
 Sulphate (Figure 6, lower)
 ```{r}
-screenmodel_out %>% filter(name=="Sulphate")%>% mutate(order=desc(as.numeric(str_sub(SWEREFID, start=1, end=7))))%>% plot_screeningtrends_reference(sorting = order, y_id = SWEREFID, wrappingvar = name)
+screenmodel_out %>% filter(name=="Sulfate")%>% mutate(order=desc(as.numeric(str_sub(SWEREFID, start=1, end=7))))%>% plot_screeningtrends_reference(sorting = order, y_id = SWEREFID, wrappingvar = name)
 ```
 Adjusting the order of sites presented, e.g. by sorting accoring to reference mean (mean of the first three years, Figure 7):
 ```{r}
   screenmodel_out%>%
-  filter(name=="Sulphate")%>%
+  filter(name=="Sulfate")%>%
     unnest(cols=c(predict, data))%>%
     filter(decimaldate>=decimaldate[1] & decimaldate<=decimaldate[1]+3)%>%
     summarize(reference=mean(`s(decimaldate)`+intercept, na.rm=TRUE))->refmean
 
 screenmodel_out%>%
-   filter(name=="Sulphate")%>%
+   filter(name=="Sulfate")%>%
   left_join(refmean)%>% 
   plot_screeningtrends_reference(sorting = reference, y_id = SWEREFID)
 
@@ -112,9 +117,9 @@ screenmodel_out%>%
 
 Individual series for Tore älv (Figure 10, left):
 ```{r}
-test_out%>%
-  filter(SWEREFID=="7334144-846887", name=="Sulphate")%>%
-plot_individual_trend(y = "Sulphate")
+screenmodel_out%>%
+  filter(SWEREFID=="7334144-846887", name=="Sulfate")%>%
+plot_individual_trend(y = "Sulfate")
 ```
 
 
@@ -122,7 +127,7 @@ plot_individual_trend(y = "Sulphate")
 Plotting relative trend magnitudes, i.e. change at a certain time point relative to average level at the same time point:
 Sulphate (Figure 10, right):
 ```{r}
-screenmodel_out %>% filter(name=="Sulphate")%>% mutate(order=desc(as.numeric(str_sub(SWEREFID, start=1, end=7))))%>% plot_screeningtrends_relative(sorting = order, y_id = SWEREFID, wrappingvar = name)
+screenmodel_out %>% filter(name=="Sulfate")%>% mutate(order=desc(as.numeric(str_sub(SWEREFID, start=1, end=7))))%>% plot_screeningtrends_relative(sorting = order, y_id = SWEREFID, wrappingvar = name)
 ```
 
 
