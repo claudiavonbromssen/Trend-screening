@@ -46,7 +46,8 @@ read_tsv("Vdr 88-17 ANC300.txt") %>%
 
 In case the outputfile should be saved as rds file we can use the command below. This create a quite large file.
 ```{r}
-#saveRDS(screenmodel_out,"screenmodel_out.rds")
+saveRDS(screenmodel_out,"screenmodel_out.rds")
+#screenmodel_out <- readRDS("screenmodel_out.rds")
 ```
 
 The created tibble screenmodel_out contains all necessary information to create the different types of plots. 
@@ -62,7 +63,7 @@ plot_individual_trend(y = "pH")
 Sulphate, Alsterälven (Figure 2, right)
 ```{r}
 screenmodel_out%>%
-  filter(SWEREFID=="6585489-420879", name=="Sulphate")%>%
+  filter(SWEREFID=="6585489-420879", name=="Sulfate")%>%
 plot_individual_trend(y = "Sulfate")
 ```
 
@@ -151,13 +152,13 @@ screenmodel_out$fit[[37]] %>% splines_and_derivative() %>% plot()
 Mean values for the first three years and the last three years in each series (Supplementary, Table A1)
 ```{r}
 screenmodel_out%>%
-  filter(name=="Sulphate")%>%
+  filter(name=="Sulfate")%>%
     unnest(cols=c(predict, data))%>%
     filter(decimaldate<=decimaldate[n()] & decimaldate>=decimaldate[n()]-3)%>%
     summarize(averagelast=mean(`s(decimaldate)`+intercept, na.rm=TRUE))->refmeanLast
 
 screenmodel_out %>% 
-  filter(name=="Sulphate")%>%
+  filter(name=="Sulfate")%>%
     left_join(refmean)%>%
     left_join(refmeanLast)%>%
   arrange(reference)%>%
