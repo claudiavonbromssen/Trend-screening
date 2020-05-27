@@ -256,7 +256,7 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
     scale_x_date(
       #date_breaks = "1 year",
       date_labels = "%Y",
-      expand = expand_scale(mult = 0.01),
+      expand = expansion(mult = 0.01),
       date_minor_breaks = "1 year", minor_breaks = waiver()
     ) +
     scale_fill_manual(values = c(
@@ -519,7 +519,7 @@ plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
     data1 %>%
       select(!!!syms(grouping)) %>%
       distinct() %>%
-      group_by(!!!wrapping) %>%
+      group_by(!!wrapping) %>% #### deprecation warning
       summarise(n_stations = n()) ->
       number_of_stations
 
@@ -744,6 +744,7 @@ splines_and_derivative <- function(gam_object, n_eval = 200, n_sim = 100, eps = 
       pval_point = 1 - pnorm(abs(est / (Se))),
       pval_point_deriv = 1 - pnorm(abs(est_deriv / (Se_deriv)))
     ) %>%
+    unnest(c(est, pval_point, pval_point_deriv, pval, pval_deriv, est_deriv)) %>%
     select_if(~!(class(.))%in%"list") ->
     output
 
