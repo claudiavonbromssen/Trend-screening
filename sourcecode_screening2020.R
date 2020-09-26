@@ -816,7 +816,9 @@ plot_individual_trend <- function(x, y=NULL, title=NULL){
            sign=sign(est),
            signif_sign = signif*sign) %>%
     ungroup %>% bind_cols(x$data[[1]],.) %>%
-    mutate(trend = annualterm+intercept) %>%
+    mutate(trend = annualterm+intercept) ->dt
+    if(x$fit[[1]]$family$link[1]=="log"){dt$trend=exp(dt$trend)}
+    dt%>%
     drop_na(variable) %>%
     ggplot(aes(x=date))+geom_line(aes(y=variable))+
     geom_line(aes(y=trend, color=as_factor(signif_sign), group=c(0)), size=1.5)+
@@ -826,6 +828,6 @@ plot_individual_trend <- function(x, y=NULL, title=NULL){
     theme_bw()+
     labs(x="Date", y=y,title=title)+
     theme(legend.position = "none") -> p
- return(p)
-  }
+  return(p)
+}
 
