@@ -21,20 +21,13 @@ read_tsv("Vdr 88-17 ANC300.txt") %>%
   mutate(Date = paste(Yr, Mo, Day, sep="-") %>% 
            ymd())%>%
   select(`SO4* mekv/l`,pH, Date , SWEREFID)%>%
-  #filter(SWEREFID=="7120198-789375") %>%
-  #rename(Alkalinitet=`Alk/Acid (mekv/l)`)
   rename(Sulfate=`SO4* mekv/l`) %>% 
-  #clean_names() %>% 
   drop_na(Sulfate) %>% 
   pivot_longer(cols=c("Sulfate", "pH")) %>% 
-  #drop_na(value) %>% 
- # mutate(date = paste(year, month, 1, sep="-") %>% 
-  #         ymd()) %>% 
   group_by(SWEREFID,name) %>% 
   mutate(n=length(Date)) %>% 
   screeningmodeling(values=  value,
                     datevar = Date, 
-                    #seasonal = F, # removed, it is a bad idea
                     link = "identity", 
                     conf.type = "conf",
                     beep = TRUE, 

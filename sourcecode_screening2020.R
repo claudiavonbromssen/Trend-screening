@@ -12,9 +12,6 @@ pacman::p_load(pacman,
                RcppRoll,
                scales)
 
-#library(janitor)
-#library(broom)
-
 select <- dplyr::select
 periods <- function(data,
                     variable,
@@ -36,7 +33,7 @@ periods <- function(data,
   }
 
   return(out)
-} # code written by me
+}
 
 trim_tails <- function(range = c(-Inf, Inf)) {
   trans_new("trim_tails",
@@ -97,7 +94,6 @@ model_gam_t <- function(x, link = "identity", formula, knots) {
 }
 
 modeling <- function(x, link = "identity", autocor = autocor, tdist = tdist) {
-  # family <- if(log == TRUE){gaussian(link="log")}else{gaussian()}
     formula <- variable ~ s(decimaldate, k = round(nrow(x) / 2)) + s(decimal_during, bs = "cc", k = 13)
     knots <- list(decimal_during = seq(0, 1, length=13))
   x <- drop_na(x, variable)
@@ -131,20 +127,19 @@ link.func <- function(x, link) {
 }
 
 screeningmodeling <- function(.data,
-                     datevar, #variabel med datum (i datumformat!)
-                     values, # variabel med värden
+                     datevar, # Date variable (in date format)
+                     values, # value variable
                      link = "identity",
                      autocor = TRUE,
                      conf.type = "conf",
                      tdist = FALSE, # only works with autocor = FALSE
                      beep = FALSE,
-                     ...){ # Variablerna att nesta under (stationsid, etc, ibland variabelnamn om gather är kört)
+                     ...){ # variables to nest under (station id e.g., in some cases variable name)
 
   nestvars <- enquos(...)
   datevar <- enquo(datevar)
   variable <- enquo(values)
   plan(multiprocess, gc = TRUE, workers = parallel::detectCores(logical = F))
-  # plan(sequential)
   tictoc::tic()
   .data %>%
     mutate(variable = !!variable,
@@ -186,7 +181,6 @@ screeningmodeling <- function(.data,
 
 
 plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingvar = NULL){
-  #if(any(is.null(c(y_id, sorting)))){stop("Provide sorting and y axis variables (in non-quoted format)")}
   sorting <- enquo(sorting)
   if(rlang::quo_is_null(sorting)){sorting <- enquo(y_id)}
   y_id <- enquo(y_id)
@@ -197,10 +191,8 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
     ungroup() %>%
     mutate(!!y_id := reorder(!!y_id, !!sorting %>% desc)) %>%
     group_by(!!!syms(grouping)) %>%
-   # mutate_at(vars(!!y_id), reorder, X = ) %>%
     unnest(cols = c(fderiv_confint, data)) %>%
     select(!!!syms(grouping), date, est, lower, upper) %>%
-    # mutate(variable_adjusted = inverse.link(link.func(variable, link = link) - `s(month)`, link = link)) %>%
     mutate(signif = !Vectorize(between)(0, lower, upper), # make a logical for significant change
       sign = sign(est)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
     select(-lower, -upper, -est) %>%
@@ -233,17 +225,7 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
       labels = c("Decreasing", "None", "Increasing"), ordered = T
     )) -> data
 
-  #data %>%
-  #  select(!!sorting) %>%
-  #  pull(1) %>%
-  #  as.vector %>%
-  #  factor %>%
-  #  as.numeric() %>%
-  #  desc ->
-  #  sorting_vector
-
   data %>%
-   # mutate_at(grouping, reorder, X = sorting_vector) %>%
     ggplot(aes(
       y = !!y_id,
       ymin = as.numeric(!!y_id) - 0.4,
@@ -254,7 +236,6 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
     )) +
     geom_rect() +
     scale_x_date(
-      #date_breaks = "1 year",
       date_labels = "%Y",
       expand = expansion(mult = 0.01),
       date_minor_breaks = "1 year", minor_breaks = waiver()
@@ -274,7 +255,6 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
 }
 
 plot_screeningtrends_pvalues <- function(.output, y_id = NULL, sorting = NULL, wrappingvar = NULL){
-  #if(any(is.null(c(y_id, sorting)))){stop("Provide sorting and y axis variables (in non-quoted format)")}
   sorting <- enquo(sorting)
   if(rlang::quo_is_null(sorting)){sorting <- enquo(y_id)}
   y_id <- enquo(y_id)
@@ -297,7 +277,6 @@ plot_screeningtrends_pvalues <- function(.output, y_id = NULL, sorting = NULL, w
            shannon_sign = shannon * sign(deriv),
            shannon_sign = ifelse(is.infinite(shannon_sign), sign(shannon_sign)*-log10(.Machine$double.eps), shannon_sign),
            sign = sign(est)*signif) %>%
-    # select(Stationsnamn, date, shannon_sign,) %>%
     mutate(
       beginning = date,
       end = lead(date)
@@ -305,21 +284,11 @@ plot_screeningtrends_pvalues <- function(.output, y_id = NULL, sorting = NULL, w
     filter(is.na(end) == F) %>%
     ungroup() -> data
 
-  #data %>%
-  #  select(!!sorting) %>%
-  #  pull(1) %>%
-  #  as.vector %>%
-  #  factor %>%
-  #  as.numeric() %>%
-  #  desc->
-  #  sorting_vector
-
   plotobj <- data %>%
-   # mutate_at(grouping, reorder, X = sorting_vector) %>%
     ggplot(aes(y=!!y_id,
                ymin=!!y_id %>% factor %>% as.numeric %>% subtract(0.4),
                ymax=!!y_id %>% factor %>% as.numeric %>% add(0.4),
-               fill=shannon_sign, #width=width,
+               fill=shannon_sign, 
                xmin = beginning,
                xmax = end))+
     geom_rect()+
@@ -330,20 +299,15 @@ plot_screeningtrends_pvalues <- function(.output, y_id = NULL, sorting = NULL, w
                          trans=trim_tails(range=c(log10(0.00001), -log10(0.00001))))+
     labs(fill="p-value *\nsign") +
     theme(axis.text.x = element_text(angle = 40, vjust = 0.9, colour = "black"),
-          # axis.ticks = element_blank(),
           legend.background = element_blank(),
           legend.key = element_blank(),
-          #panel.background = element_blank(),
-          #panel.border = element_blank(),
-          strip.background = element_blank(),
-          #plot.background = element_blank()
+          strip.background = element_blank()
     )
   if (!rlang::quo_is_null(wrapping)) { plotobj <- plotobj + facet_wrap(vars(!!wrapping)) }
   return(plotobj)
 }
 
 plot_screeningtrends_relative <- function(.output, y_id = NULL, sorting = NULL, wrappingvar = NULL){
-  #if(any(is.null(c(y_id, sorting)))){stop("Provide sorting and y axis variables (in non-quoted format)")}
   sorting <- enquo(sorting)
   if(rlang::quo_is_null(sorting)){sorting <- enquo(y_id)}
   y_id <- enquo(y_id)
@@ -359,8 +323,6 @@ plot_screeningtrends_relative <- function(.output, y_id = NULL, sorting = NULL, 
     arrange(!!!syms(grouping), date) %>%
     group_by(!!!syms(grouping)) %>%
     mutate(relative = round(deriv, 2)/(intercept+`s(decimaldate)`)) %>%
-
-    # select(Stationsnamn, date, shannon_sign,) %>%
     mutate(
       beginning = date,
       end = lead(date)
@@ -369,42 +331,27 @@ plot_screeningtrends_relative <- function(.output, y_id = NULL, sorting = NULL, 
     filter(is.na(end) == F) %>%
     ungroup() -> data
 
- #data %>%
- #  select(!!sorting) %>%
- #  pull(1) %>%
- #  as.vector %>%
- #  factor %>%
- #  as.numeric() %>%
- #  desc->
- #  sorting_vector
-
   plotobj <- data %>%
-   # mutate_at(grouping, reorder, X = sorting_vector) %>%
     ggplot(aes(y=!!y_id,
                ymin=!!y_id %>% factor %>% as.numeric %>% subtract(0.4),
                ymax=!!y_id %>% factor %>% as.numeric %>% add(0.4),
-               fill=relative, #width=width,
+               fill=relative, 
                xmin = beginning,
                xmax = end))+
     geom_rect()+
-    scale_fill_gradient2(low = "#56B4E9", mid="#F0E442",high = "#D55E00", midpoint = 0, # breaks=seq(-2,2,0.5),
-                         labels=scales::percent, trans=trim_tails(range=c(-1.5, 1.5)))+
-    #labs(fill="p-value *\nsign") +
+    scale_fill_gradient2(low = "#56B4E9", mid = "#F0E442", high = "#D55E00", midpoint = 0, 
+                         labels=scales::percent, trans = trim_tails(range=c(-1.5, 1.5)))+
     theme(axis.text.x = element_text(angle = 40, vjust = 0.9, colour = "black"),
-          # axis.ticks = element_blank(),
           legend.background = element_blank(),
           legend.key = element_blank(),
-          #panel.background = element_blank(),
-          #panel.border = element_blank(),
-          strip.background = element_blank(),
-          #plot.background = element_blank()
+          strip.background = element_blank()
     )
   if (!rlang::quo_is_null(wrapping)) { plotobj <- plotobj + facet_wrap(vars(!!wrapping)) }
   return(plotobj)
 }
 
 plot_screeningtrends_reference <- function(.output, y_id = NULL, sorting = NULL, wrappingvar = NULL){
-  #if(any(is.null(c(y_id, sorting)))){stop("Provide sorting and y axis variables (in non-quoted format)")}
+
   sorting <- enquo(sorting)
   if(rlang::quo_is_null(sorting)){sorting <- enquo(y_id)}
   y_id <- enquo(y_id)
@@ -418,12 +365,9 @@ plot_screeningtrends_reference <- function(.output, y_id = NULL, sorting = NULL,
     group_by(!!!syms(grouping)) %>%
     mutate(fderiv = map(fderiv, ~tibble(deriv = .x$derivatives[[1]][[1]], deriv_se = .x$derivatives[[1]][[2]]))) %>%
     unnest(cols = c(predict, fderiv, data)) %>%
-    #inner_join(refmean)%>%
     arrange(!!!syms(grouping), date) %>%
     group_by(!!!syms(grouping)) %>%
     mutate(relative = (intercept+`s(decimaldate)`)/(mean(`s(decimaldate)`[decimaldate<decimaldate[1]+3])+intercept)) %>%
-
-    # select(Stationsnamn, date, shannon_sign,) %>%
     mutate(
       beginning = date,
       end = lead(date)
@@ -432,53 +376,34 @@ plot_screeningtrends_reference <- function(.output, y_id = NULL, sorting = NULL,
     filter(is.na(end) == F) %>%
     ungroup() -> data
 
- # data %>%
- #   select(!!sorting) %>%
- #   pull(1) %>%
- #   as.vector %>%
- #   factor %>%
- #   as.numeric() %>%
- #   desc->
- #   sorting_vector
-
   plotobj <- data %>%
-  #  mutate_at(grouping, reorder, X = sorting_vector) %>%
     ggplot(aes(y=!!y_id,
                ymin=!!y_id %>% factor %>% as.numeric %>% subtract(0.4),
                ymax=!!y_id %>% factor %>% as.numeric %>% add(0.4),
-               fill=relative, #width=width,
+               fill=relative, 
                xmin = beginning,
                xmax = end))+
     geom_rect()+
-    scale_fill_gradient2(low = "#56B4E9", mid="#F0E442",high = "#D55E00", midpoint = 1, # breaks=seq(-2,2,0.5),
+    scale_fill_gradient2(low = "#56B4E9", mid="#F0E442",high = "#D55E00", midpoint = 1, 
                          labels=scales::percent, trans=trim_tails(range=c(0.1, 2)))+
-    #labs(fill="p-value *\nsign") +
     theme(axis.text.x = element_text(angle = 40, vjust = 0.9, colour = "black"),
-          # axis.ticks = element_blank(),
           legend.background = element_blank(),
           legend.key = element_blank(),
-          #panel.background = element_blank(),
-          #panel.border = element_blank(),
-          strip.background = element_blank(),
-          #plot.background = element_blank()
+          strip.background = element_blank()
     )
   if (!rlang::quo_is_null(wrapping)) { plotobj <- plotobj + facet_wrap(vars(!!wrapping)) }
   return(plotobj)
 }
 
 
-plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
+plot_proportions <- function(.output, adjust = FALSE, 
                              wrappingvar = NULL){
-  #if(any(is.null(c(y_id, sorting)))){stop("Provide sorting and y axis variables (in non-quoted format)")}
-  #sorting <- enquo(sorting)
-  #y_id <- enquo(y_id)
   grouping <- group_vars(.output)
   wrapping <- enquo(wrappingvar)
 
   .output %>%
     unnest(cols = c(fderiv_confint, data)) %>%
     select(!!!syms(grouping), date, est, lower, upper) %>%
-    # mutate(variable_adjusted = inverse.link(link.func(variable, link = link) - `s(month)`, link = link)) %>%
     mutate(signif = !Vectorize(between)(0, lower, upper), # make a logical for significant change
            sign = sign(est)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
     select(-lower, -upper, -est) %>%
@@ -570,11 +495,6 @@ plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
       "None" = "#F0E442",
       "Increasing" = "#D55E00"
     )) +
-    #scale_x_date(
-    #  date_breaks = "1 year", date_labels = "%Y",
-    #  expand = expand_scale(mult = 0.01),
-    #  date_minor_breaks = "1 year", minor_breaks = waiver()
-    #) +
     theme_minimal() +
     theme(
       axis.text.x = element_text(angle = 90, vjust = 0.5, colour = "black"),
@@ -594,16 +514,11 @@ plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
 
 
 plot_data <- function(.output){
-  #if(any(is.null(c(y_id, sorting)))){stop("Provide sorting and y axis variables (in non-quoted format)")}
-  #sorting <- enquo(sorting)
-  #y_id <- enquo(y_id)
   grouping <- group_vars(.output)
- # wrapping <- enquo(wrappingvar)
 
   .output %>%
     unnest(cols = c(fderiv_confint, data)) %>%
     select(!!!syms(grouping), date, est, lower, upper) %>%
-    # mutate(variable_adjusted = inverse.link(link.func(variable, link = link) - `s(month)`, link = link)) %>%
     mutate(signif = !Vectorize(between)(0, lower, upper), # make a logical for significant change
            sign = sign(est)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
     select(-lower, -upper, -est) %>%
@@ -634,17 +549,7 @@ plot_data <- function(.output){
     mutate(sign = sign %>% factor(
       levels = c(-1, 0, 1) %>% rev,
       labels = c("Decreasing", "None", "Increasing") %>% rev, ordered = T
-    )) -> data#%>%
-    #mutate(date = Vectorize(seq.Date)(from = beginning, to = end - 1, 1)) %>%
-   # unnest(date) %>%
-    # group_by(date) %>%
-   # select(!!!syms(grouping), sign, date) %>%
-   # group_by(!!wrapping) %>%
-   # count(date, sign, .drop = F) %>%
-   # group_by(!!wrapping, date) %>%
-    #mutate(proportion = n / sum(n))
-   # ->
-    #data
+    )) -> data
 
   return(data)
 }
@@ -668,8 +573,6 @@ splines_and_derivative <- function(gam_object, n_eval = 200, n_sim = 100, eps = 
       term = map_chr(smooth_obj, ~ .x$term),
       by = map_chr(smooth_obj, ~ .x$by),
       data = map(term, ~ tibble(x = data[[.x]])),
-      #min = map2(smooth_obj, data, ~if(class(.x)%in%"cyclic.smooth"){min(.x$xp)}else{}) ### Jag har gått vilse i koden,
-      #få till gränser för bs="cc"
       grid = ifelse(by != "NA",
                     map(data, ~ tibble(x = seq(floor(min(.x[[1]])), ceiling(max(.x[[1]])), length.out = n_eval)) %>% mutate(by = 1)),
                     map(data, ~ tibble(x = seq(floor(min(.x[[1]])), ceiling(max(.x[[1]])), length.out = n_eval)))),
@@ -816,7 +719,7 @@ plot_individual_trend <- function(x, y=NULL, title=NULL){
            sign=sign(est),
            signif_sign = signif*sign) %>%
     ungroup %>% bind_cols(x$data[[1]],.) %>%
-    mutate(trend = annualterm+intercept) ->dt
+    mutate(trend = annualterm+intercept) -> dt
     if(x$fit[[1]]$family$link[1]=="log"){dt$trend=exp(dt$trend)}
     dt%>%
     drop_na(variable) %>%

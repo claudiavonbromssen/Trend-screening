@@ -16,8 +16,7 @@ Figure 8: Hierarchical generalised additive model for the region of Värmland
 ```{r}
 Series<-read_tsv("Vdr 88-17 ANC300.txt")
 Series%>%
-  filter(SWEREFID=="6559832-380439" | SWEREFID=="6581519-383565" | SWEREFID=="6585489-420879" | SWEREFID=="6586310-399589" | SWEREFID=="6591038-411956"| SWEREFID=="6635190-525485" |
-           SWEREFID=="6538630-449064" | SWEREFID=="6585343-440992"| SWEREFID=="6652237-421507")%>%
+  filter(SWEREFID %in% c("6559832-380439", "6581519-383565", "6585489-420879", "6586310-399589", "6591038-411956", "6635190-525485", "6538630-449064", "6585343-440992", "6652237-421507"))%>%
   mutate(Sulfate=`SO4* mekv/l`, date = paste(Yr, Mo, Day, sep="-") %>% 
            ymd())%>%
   mutate(datedecimal=decimal_date(date))->Series_V
@@ -83,7 +82,6 @@ Series_V%>%
   mutate(n=length(date)) %>% 
   screeningmodeling(values=  value,
                     datevar = date, 
-                    #seasonal = F, # removed, it is a bad idea
                     link = "identity", 
                     conf.type = "conf",
                     beep = TRUE, 
