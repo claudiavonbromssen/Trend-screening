@@ -2,6 +2,8 @@
 
 This repository contains R-scripts and functions to visualise trend for multiple series simultaneously. Main code is found in 'Screening_plots_for_article.Rmd' where the dataset 'vdr 88-17 ANC300.txt' is analysed. The available functions are found in 'sourcecode_screening2020.R'. An additional analysis on a smaller regional scale is described in 'Hierachical GAM for the region of Värmland.Rmd'. 
 
+Update 15 September 2023: A new sourcecode file is available to match changes in the gratia package: sourcecode_screening2023.R. Also a sourcecode file that works with annual rather than seasonal data is available (sourcecode_screening2023_annual_data.R. 
+
 The following functions are available: 
 
 screeningmodeling()
