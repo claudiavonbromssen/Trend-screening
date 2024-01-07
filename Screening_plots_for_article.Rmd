@@ -1,4 +1,14 @@
 ---
+title: "Untitled"
+output: html_document
+date: "2024-01-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+---
 title: "R Notebook"
 output:
   pdf_document: default
@@ -30,6 +40,7 @@ read_tsv("Vdr 88-17 ANC300.txt") %>%
                     datevar = Date, 
                     link = "identity", 
                     conf.type = "conf",
+                    conf.level=0.95,
                     beep = TRUE, 
                     tdist = F,
                     autocor = TRUE,
@@ -175,4 +186,3 @@ test_out%>%
   left_join(refmean)%>% 
   plot_screeningtrends_reference(sorting = reference, y_id = SWEREFID)
 ```
-
