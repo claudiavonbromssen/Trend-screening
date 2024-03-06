@@ -127,15 +127,15 @@ link.func <- function(x, link) {
 }
 
 screeningmodeling <- function(.data,
-                              year, #variabel med datum (i datumformat!)
-                              values, # variabel med värden
+                              year, # numerical variable that indicates year
+                              values, # the values to be analysed
                               link = "identity",
                               autocor = FALSE,
                               conf.type = "confidence",
                               conf.level=0.95,
                               tdist = FALSE, # only works with autocor = FALSE
                               beep = FALSE,
-                              ...){ # Variablerna att nesta under (stationsid, etc, ibland variabelnamn om gather är kört)
+                              ...){ # Variables to use for nesting (stationsid, etc)
   
   nestvars <- enquos(...)
   year <- enquo(year)
