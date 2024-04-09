@@ -9,7 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Read functions for screeningmodels and screening plots
 ```{r}
-source("sourcecode_screening2020.R")
+source("sourcecode_screening2024.R")
 ```
 
 Figure 8: Hierarchical generalised additive model for the region of Värmland
