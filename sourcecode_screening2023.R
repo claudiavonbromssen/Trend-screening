@@ -172,7 +172,7 @@ screeningmodeling <- function(.data,
                                       otherwise = NA_integer_,
                                       quiet = F),
                        .progress = T, seed=T),
-     fderiv = map2(fit, data, possibly(~ derivatives(object=.x, type="forward",term = "s(decimaldate)", interval=conf.type, level=conf.level, data = .y), otherwise = NA_integer_)),
+     fderiv = map2(fit, data, possibly(~ derivatives(object=.x, type="forward",select = "s(decimaldate)", interval=conf.type, level=conf.level, data = .y), otherwise = NA_integer_)),
      
       #fderiv_confint = map2(fderiv, data, possibly(~ .x %>% confint(type = conf.type, level=level), otherwise = NA_integer_)),
       predict = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "terms") %>% as_tibble(), otherwise = NA_integer_)),
@@ -189,115 +189,7 @@ screeningmodeling <- function(.data,
 }
 
 
-screeningmodeling_weighted <- function(.data,
-                              datevar, #variabel med datum (i datumformat!)
-                              values, # variabel med värden
-                              link = "identity",
-                              autocor = TRUE,
-                              conf.type = "conf",
-                              tdist = FALSE, # only works with autocor = FALSE
-                              beep = FALSE,
-                              weights = varIdent(form =~ 1|values),
-                              ...){ # Variablerna att nesta under (stationsid, etc, ibland variabelnamn om gather är kört)
-  
-  nestvars <- enquos(...)
-  datevar <- enquo(datevar)
-  variable <- enquo(values)
-  plan(multiprocess, gc = TRUE, workers = parallel::detectCores(logical = F))
-  # plan(sequential)
-  tictoc::tic()
-  .data %>%
-    mutate(variable = !!variable,
-           date = !!datevar) %>%
-    select(date, variable, !!!nestvars) %>%
-    group_by(!!!nestvars, date) %>%
-    summarise_at("variable", mean) %>%
-    ungroup() %>%
-    drop_na(variable) %>%
-    group_by(!!!nestvars) %>%
-    complete(date = full_seq(date, 1)) %>%
-    mutate(decimaldate = decimal_date(date),
-           month = month(date),
-           decimal_during = decimaldate - year(date)) %>%
-    nest() %>%
-    ungroup() %>%
-    mutate(
-      fit = future_map(data, possibly(~ modeling(.x,
-                                                 link = link,
-                                                 autocor = autocor, tdist = tdist),
-                                      
-                                      otherwise = NA_integer_,
-                                      quiet = F),
-                       .progress = T),
-      fderiv = map2(fit, data, possibly(~ derivatives(.x, term = "s(decimaldate)",interval=conf.type, newdata = .y), otherwise = NA_integer_)),
-      #deriv_confint = map2(fderiv, data, possibly(~ .x %>% confint(type = conf.type), otherwise = NA_integer_)),
-      predict = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "terms") %>% as_tibble(), otherwise = NA_integer_)),
-      fitted = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "link"), otherwise = NA_integer_)),
-      autocor = map_lgl(fit, possibly(~.x$autocor, otherwise = NA_integer_)),
-      intercept = map_dbl(fit, possibly(~ coef(.x) %>% .[1], otherwise = NA_integer_))
-    ) %>%
-    group_by(!!!nestvars) %>%
-    dplyr::select(!!!nestvars, autocor, everything())->
-    output
-  tictoc::toc()
-  if(beep){beepr::beep()}
-  return(output)
-}
 
-
-screeningmodeling_10 <- function(.data,
-                                 datevar, #variabel med datum (i datumformat!)
-                                 values, # variabel med värden
-                                 link = "identity",
-                                 autocor = TRUE,
-                                 conf.type = "conf",
-                                 tdist = FALSE, # only works with autocor = FALSE
-                                 beep = FALSE,
-                                 ...){ # Variablerna att nesta under (stationsid, etc, ibland variabelnamn om gather är kört)
-  
-  nestvars <- enquos(...)
-  datevar <- enquo(datevar)
-  variable <- enquo(values)
-  plan(multiprocess, gc = TRUE, workers = parallel::detectCores(logical = F))
-  # plan(sequential)
-  tictoc::tic()
-  .data %>%
-    mutate(variable = !!variable,
-           date = !!datevar) %>%
-    select(date, variable, !!!nestvars) %>%
-    group_by(!!!nestvars, date) %>%
-    summarise_at("variable", mean) %>%
-    ungroup() %>%
-    drop_na(variable) %>%
-    group_by(!!!nestvars) %>%
-    #  complete(date = full_seq(date, 1)) %>%
-    mutate(decimaldate = decimal_date(date),
-           month = month(date),
-           decimal_during = decimaldate - year(date)) %>%
-    nest() %>%
-    ungroup() %>%
-    mutate(
-      fit = future_map(data, possibly(~ modeling(.x,
-                                                 link = link,
-                                                 autocor = autocor, tdist = tdist),
-                                      
-                                      otherwise = NA_integer_,
-                                      quiet = F),
-                       .progress = T),
-      fderiv = map2(fit, data, possibly(~ derivatives(.x, term = "decimaldate", interval=conf.type, newdata = .y), otherwise = NA_integer_)),
-     # fderiv_confint = map2(fderiv, data, possibly(~ .x %>% confint(type = conf.type, level=0.8), otherwise = NA_integer_)),
-      predict = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "terms") %>% as_tibble(), otherwise = NA_integer_)),
-      fitted = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "link"), otherwise = NA_integer_)),
-      autocor = map_lgl(fit, possibly(~.x$autocor, otherwise = NA_integer_)),
-      intercept = map_dbl(fit, possibly(~ coef(.x) %>% .[1], otherwise = NA_integer_))
-    ) %>%
-    group_by(!!!nestvars) %>%
-    dplyr::select(!!!nestvars, autocor, everything())->
-    output
-  tictoc::toc()
-  if(beep){beepr::beep()}
-  return(output)
-}
 
 
 plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingvar = NULL){
@@ -312,13 +204,15 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
     ungroup() %>%
     mutate(!!y_id := reorder(!!y_id, !!sorting %>% desc)) %>%
     group_by(!!!syms(grouping)) %>%
+    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative, deriv_se = .x$.se, lower=.x$.lower_ci, upper=.x$.upper_ci))) %>%
+    
     # mutate_at(vars(!!y_id), reorder, X = ) %>%
     unnest(cols = c(fderiv, data)) %>%
-    select(!!!syms(grouping), date, derivative, lower, upper) %>%
+    select(!!!syms(grouping), date, deriv, lower, upper) %>%
     # mutate(variable_adjusted = inverse.link(link.func(variable, link = link) - `s(month)`, link = link)) %>%
     mutate(signif = !Vectorize(between)(0, lower, upper), # make a logical for significant change
-           sign = sign(derivative)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
-    select(-lower, -upper, -derivative) %>%
+           sign = sign(deriv)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
+    select(-lower, -upper, -deriv) %>%
     arrange(!!!syms(grouping), date) %>%
     nest() %>%
     group_by(!!!syms(grouping)) %>%
@@ -401,7 +295,7 @@ plot_screeningtrends_pvalues <- function(.output, y_id = NULL, sorting = NULL, w
     ungroup() %>%
     mutate(!!y_id := reorder(!!y_id, !!sorting %>% desc)) %>%
     group_by(!!!syms(grouping)) %>%
-    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$derivative, deriv_se = .x$se, lower=.x$lower, upper=.x$upper))) %>%
+    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative, deriv_se = .x$.se, lower=.x$.lower_ci, upper=.x$.upper_ci))) %>%
     unnest(cols = c(fderiv,  data)) %>%
     arrange(!!!syms(grouping), date) %>%
     mutate(z = deriv/deriv_se,
@@ -440,6 +334,13 @@ plot_screeningtrends_pvalues <- function(.output, y_id = NULL, sorting = NULL, w
                xmin = beginning,
                xmax = end))+
     geom_rect()+
+    scale_x_date(
+      #date_breaks = "1 year",
+      date_labels = "%Y",
+      expand = expansion(mult = 0.01),
+      date_minor_breaks = "1 year", minor_breaks = waiver()
+    ) +
+    
     scale_fill_gradient2(low = "#56B4E9", mid="#F0E442",
                          high = "#D55E00", midpoint = 0,
                          breaks=seq(-16,16,2),
@@ -471,7 +372,7 @@ plot_screeningtrends_relative <- function(.output, y_id = NULL, sorting = NULL, 
     ungroup() %>%
     mutate(!!y_id := reorder(!!y_id, !!sorting %>% desc)) %>%
     group_by(!!!syms(grouping)) %>%
-    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$derivative, deriv_se = .x$se, lower=.x$lower, upper=.x$upper))) %>%
+    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative, deriv_se = .x$.se, lower=.x$.lower_ci, upper=.x$.upper_ci))) %>%
     unnest(cols = c(predict, fderiv, data)) %>%
     arrange(!!!syms(grouping), date) %>%
     group_by(!!!syms(grouping)) %>%
@@ -504,6 +405,12 @@ plot_screeningtrends_relative <- function(.output, y_id = NULL, sorting = NULL, 
                xmin = beginning,
                xmax = end))+
     geom_rect()+
+    scale_x_date(
+      #date_breaks = "1 year",
+      date_labels = "%Y",
+      expand = expansion(mult = 0.01),
+      date_minor_breaks = "1 year", minor_breaks = waiver()
+    ) +
     scale_fill_gradient2(low = "#56B4E9", mid="#F0E442",high = "#D55E00", midpoint = 0, # breaks=seq(-2,2,0.5),
                          labels=scales::percent, trans=trim_tails(range=c(-1.5, 1.5)))+
     #labs(fill="p-value *\nsign") +
@@ -533,7 +440,7 @@ plot_screeningtrends_reference <- function(.output, y_id = NULL, sorting = NULL,
     ungroup() %>%
     mutate(!!y_id := reorder(!!y_id, !!sorting %>% desc)) %>%
     group_by(!!!syms(grouping)) %>%
-    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$derivative, deriv_se = .x$se, lower=.x$lower, upper=.x$upper))) %>%
+    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative, deriv_se = .x$.se, lower=.x$.lower_ci, upper=.x$.upper_ci))) %>%
     unnest(cols = c(predict, fderiv, data)) %>%
     #inner_join(refmean)%>%
     arrange(!!!syms(grouping), date) %>%
@@ -567,6 +474,12 @@ plot_screeningtrends_reference <- function(.output, y_id = NULL, sorting = NULL,
                xmin = beginning,
                xmax = end))+
     geom_rect()+
+    scale_x_date(
+      #date_breaks = "1 year",
+      date_labels = "%Y",
+      expand = expansion(mult = 0.01),
+      date_minor_breaks = "1 year", minor_breaks = waiver()
+    ) +
     scale_fill_gradient2(low = "#56B4E9", mid="#F0E442",high = "#D55E00", midpoint = 1, # breaks=seq(-2,2,0.5),
                          labels=scales::percent, trans=trim_tails(range=c(0.1, 2)))+
     #labs(fill="p-value *\nsign") +
@@ -593,12 +506,13 @@ plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
   wrapping <- enquo(wrappingvar)
   
   .output %>%
+    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative, deriv_se = .x$.se, lower=.x$.lower_ci, upper=.x$.upper_ci))) %>%
     unnest(cols = c(fderiv, data)) %>%
-    select(!!!syms(grouping), date, derivative, lower, upper) %>%
+    select(!!!syms(grouping), date, deriv, lower, upper) %>%
     # mutate(variable_adjusted = inverse.link(link.func(variable, link = link) - `s(month)`, link = link)) %>%
     mutate(signif = !Vectorize(between)(0, lower, upper), # make a logical for significant change
-           sign = sign(derivative)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
-    select(-lower, -upper, -derivative) %>%
+           sign = sign(deriv)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
+    select(-lower, -upper, -deriv) %>%
     arrange(!!!syms(grouping), date) %>%
     nest() %>%
     group_by(!!!syms(grouping)) %>%
@@ -932,10 +846,14 @@ plot_individual_trend <- function(x, y=NULL, title=NULL){
   annualterm <- predict(x$fit[[1]], newdata=x$data[[1]], type="terms")[,1]
   intercept <- x$fit[[1]]$coef["(Intercept)"]
   x$fderiv[[1]] %>%
+    mutate(deriv = .derivative, 
+           deriv_se = .se, 
+           lower=.lower_ci, 
+           upper=.upper_ci) %>%
     as_tibble %>%
     rowwise %>%
     mutate(signif = !between(0, lower, upper),
-           sign=sign(derivative),
+           sign=sign(deriv),
            signif_sign = signif*sign) %>%
     ungroup %>% bind_cols(x$data[[1]],.) %>%
     mutate(trend = annualterm+intercept) %>%
@@ -954,11 +872,16 @@ plot_individual_trend <- function(x, y=NULL, title=NULL){
   return(p)
 }
 
+
 plot_individual_trend_log <- function(x, y=NULL, title=NULL){
   if(nrow(x) != 1){stop("Filter out the variable (and/or station) you are interested in.")}
   annualterm <- predict(x$fit[[1]], newdata=x$data[[1]], type="terms")[,1]
   intercept <- x$fit[[1]]$coef["(Intercept)"]
   x$fderiv[[1]] %>%
+    mutate(deriv = .derivative, 
+           deriv_se = .se, 
+           lower=.lower_ci, 
+           upper=.upper_ci) %>%
     as_tibble %>%
     rowwise %>%
     mutate(signif = !between(0, lower, upper),
