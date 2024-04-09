@@ -152,61 +152,7 @@ screeningmodeling <- function(.data,
     ungroup() %>%
     drop_na(variable) %>%
     group_by(!!!nestvars) %>%
-  #  complete(date = full_seq(date, 1)) %>%
-     nest() %>%
-    ungroup() %>%
-    mutate(
-      fit = future_map(data, possibly(~ modeling(.x,
-                                                 link = link,
-                                                 autocor = autocor, tdist = tdist),
-                                      
-                                      otherwise = NA_integer_,
-                                      quiet = F),
-                       .progress = T),
-      fderiv = map2(fit, data, possibly(~ derivatives(object=.x, type="forward", term = "s(year)", interval=conf.type, level=conf.level,data = .y)%>%mutate(year1=data)%>%select(-data), otherwise = NA_integer_)),
-      #fderiv_confint = map2(fderiv, data, possibly(~ .x %>% confint(type = conf.type), otherwise = NA_integer_)),
-      predict = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "terms") %>% as_tibble(), otherwise = NA_integer_)),
-      fitted = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "link"), otherwise = NA_integer_)),
-      autocor = map_lgl(fit, possibly(~.x$autocor, otherwise = NA_integer_)),
-      intercept = map_dbl(fit, possibly(~ coef(.x) %>% .[1], otherwise = NA_integer_))
-    ) %>%
-    group_by(!!!nestvars) %>%
-    dplyr::select(!!!nestvars, autocor, everything())->
-    output
-  tictoc::toc()
-  if(beep){beepr::beep()}
-  return(output)
-}
-
-
-screeningmodeling_weighted <- function(.data,
-                              year, #variabel med datum (i datumformat!)
-                              values, # variabel med värden
-                              link = "identity",
-                              autocor = TRUE,
-                              conf.type = "confidence",
-                              conf.level=0.95, 
-                              tdist = FALSE, # only works with autocor = FALSE
-                              beep = FALSE,
-                              weights = varIdent(form =~ 1|values),
-                              ...){ # Variablerna att nesta under (stationsid, etc, ibland variabelnamn om gather är kört)
-  
-  nestvars <- enquos(...)
-  year <- enquo(year)
-  variable <- enquo(values)
-  plan(multisession, gc = TRUE, workers = parallel::detectCores(logical = F))
-  # plan(sequential)
-  tictoc::tic()
-  .data %>%
-    mutate(variable = !!variable,
-           year = !!year) %>%
-    select(year, variable, !!!nestvars) %>%
-    group_by(!!!nestvars, year) %>%
-    summarise_at("variable", mean) %>%
-    ungroup() %>%
-    drop_na(variable) %>%
-    group_by(!!!nestvars) %>%
-    complete(year = full_seq(year, 1)) %>%
+    #  complete(date = full_seq(date, 1)) %>%
     nest() %>%
     ungroup() %>%
     mutate(
@@ -217,7 +163,7 @@ screeningmodeling_weighted <- function(.data,
                                       otherwise = NA_integer_,
                                       quiet = F),
                        .progress = T),
-      fderiv = map2(fit, data, possibly(~ derivatives(.x, term = "year", interval=conf.type, level=conf.level, data = .y), otherwise = NA_integer_)),
+      fderiv = map2(fit, data, possibly(~ derivatives(object=.x, type="forward", select = "s(year)", interval=conf.type, level=conf.level,data = .y), otherwise = NA_integer_)),
       #fderiv_confint = map2(fderiv, data, possibly(~ .x %>% confint(type = conf.type), otherwise = NA_integer_)),
       predict = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "terms") %>% as_tibble(), otherwise = NA_integer_)),
       fitted = map2(fit, data, possibly(~ predict(.x, newdata = .y, type = "link"), otherwise = NA_integer_)),
@@ -231,6 +177,8 @@ screeningmodeling_weighted <- function(.data,
   if(beep){beepr::beep()}
   return(output)
 }
+
+
 
 
 
@@ -247,13 +195,13 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
     mutate(!!y_id := reorder(!!y_id, !!sorting %>% desc)) %>%
     group_by(!!!syms(grouping)) %>%
     # mutate_at(vars(!!y_id), reorder, X = ) %>%
+    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative, deriv_se = .x$.se, lower=.x$.lower_ci, upper=.x$.upper_ci, year=.x$year))) %>%
     unnest(cols = c(fderiv)) %>%
-    mutate(year=year1)%>%
-    select(!!!syms(grouping), year, derivative, lower, upper) %>%
+    select(!!!syms(grouping), year, deriv, lower, upper) %>%
     # mutate(variable_adjusted = inverse.link(link.func(variable, link = link) - `s(month)`, link = link)) %>%
     mutate(signif = !Vectorize(between)(0, lower, upper), # make a logical for significant change
-           sign = sign(derivative)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
-    select(-lower, -upper, -derivative) %>%
+           sign = sign(deriv)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
+    select(-lower, -upper, -deriv) %>%
     arrange(!!!syms(grouping), year) %>%
     nest() %>%
     group_by(!!!syms(grouping)) %>%
@@ -283,7 +231,7 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
       levels = c(-1, 0, 1),
       labels = c("Decreasing", "None", "Increasing"), ordered = T
     )) -> data
-
+  
   #data %>%
   #  select(!!sorting) %>%
   #  pull(1) %>%
@@ -304,8 +252,8 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
       fill = sign
     )) +
     geom_rect() +
-   # scale_x_date(
-      #date_breaks = "1 year",
+    # scale_x_date(
+    #date_breaks = "1 year",
     #  date_labels = "%Y",
     #  expand = expansion(mult = 0.01),
     #  date_minor_breaks = "1 year", minor_breaks = waiver()
@@ -336,7 +284,7 @@ plot_screeningtrends_pvalues <- function(.output, y_id = NULL, sorting = NULL, w
     ungroup() %>%
     mutate(!!y_id := reorder(!!y_id, !!sorting %>% desc)) %>%
     group_by(!!!syms(grouping)) %>%
-    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$derivative, deriv_se = .x$se, lower=.x$lower, upper=.x$upper))) %>%
+    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative, deriv_se = .x$.se, lower=.x$.lower_ci, upper=.x$.upper_ci))) %>%
     unnest(cols = c(fderiv, data)) %>%
     arrange(!!!syms(grouping), year) %>%
     mutate(z = deriv/deriv_se,
@@ -355,7 +303,7 @@ plot_screeningtrends_pvalues <- function(.output, y_id = NULL, sorting = NULL, w
     ) %>%
     filter(is.na(end) == F) %>%
     ungroup() -> data
-
+  
   
   #data %>%
   #  select(!!sorting) %>%
@@ -406,7 +354,7 @@ plot_screeningtrends_relative <- function(.output, y_id = NULL, sorting = NULL, 
     ungroup() %>%
     mutate(!!y_id := reorder(!!y_id, !!sorting %>% desc)) %>%
     group_by(!!!syms(grouping)) %>%
-    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$derivative, deriv_se = .x$se, lower=.x$lower, upper=.x$upper))) %>%
+    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative, deriv_se = .x$.se, lower=.x$.lower_ci, upper=.x$.upper_ci))) %>%
     unnest(cols = c(predict, fderiv, data)) %>%
     arrange(!!!syms(grouping), year) %>%
     group_by(!!!syms(grouping)) %>%
@@ -468,7 +416,8 @@ plot_screeningtrends_reference <- function(.output, y_id = NULL, sorting = NULL,
     ungroup() %>%
     mutate(!!y_id := reorder(!!y_id, !!sorting %>% desc)) %>%
     group_by(!!!syms(grouping)) %>%
-    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$derivatives[[1]][[1]], deriv_se = .x$derivatives[[1]][[2]]))) %>%
+   # mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative[[1]][[1]], deriv_se = .x$.derivative[[1]][[2]]))) %>%
+     mutate(fderiv = map(fderiv, ~tibble(year1 = .x$year))) %>%
     unnest(cols = c(predict, fderiv, data)) %>%
     #inner_join(refmean)%>%
     arrange(!!!syms(grouping), year) %>%
@@ -528,12 +477,13 @@ plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
   wrapping <- enquo(wrappingvar)
   
   .output %>%
+    mutate(fderiv = map(fderiv, ~tibble(deriv = .x$.derivative, deriv_se = .x$.se, lower=.x$.lower_ci, upper=.x$.upper_ci))) %>%
     unnest(cols = c(fderiv, data)) %>%
-    select(!!!syms(grouping), year, derivative, lower, upper) %>%
+    select(!!!syms(grouping), year, deriv, lower, upper) %>%
     # mutate(variable_adjusted = inverse.link(link.func(variable, link = link) - `s(month)`, link = link)) %>%
     mutate(signif = !Vectorize(between)(0, lower, upper), # make a logical for significant change
-           sign = sign(derivative)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
-    select(-lower, -upper, -derivative) %>%
+           sign = sign(deriv)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
+    select(-lower, -upper, -deriv) %>%
     arrange(!!!syms(grouping), year) %>%
     nest() %>%
     group_by(!!!syms(grouping)) %>%
@@ -542,7 +492,7 @@ plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
                       transmute(id = paste0(signif, sign)) %$% # combine sign of significant estimates and significance
                       id %>% # pass onto
                       rle() %>% # find lengths of periods with the same values
-                    .$lengths %>% # extract lengths
+                      .$lengths %>% # extract lengths
                       add(1) %>% # add on to find beginning of each period except first one
                       .[-length(.)] %>% # remove last one due to being the last rownumber+1
                       cumsum() %>% # calculate cumulative sums to find the positions
@@ -561,7 +511,7 @@ plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
     select(-periods, -year, -signif) %>% # select out only beginning, end, station, and significant sign of period
     ungroup() %>%
     mutate(sign = sign %>% factor(
-     # levels = c(-1, 0, 1) %>% rev,
+      # levels = c(-1, 0, 1) %>% rev,
       #labels = c("Decreasing", "None", "Increasing") %>% rev, ordered = T
       levels = c(1, 0, -1) %>% rev,
       labels = c("Increasing", "None", "Decreasing") %>% rev, ordered = T
@@ -657,216 +607,6 @@ plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
 }
 
 
-plot_data <- function(.output){
-  #if(any(is.null(c(y_id, sorting)))){stop("Provide sorting and y axis variables (in non-quoted format)")}
-  #sorting <- enquo(sorting)
-  #y_id <- enquo(y_id)
-  grouping <- group_vars(.output)
-  # wrapping <- enquo(wrappingvar)
-  
-  .output %>%
-    unnest(cols = c(fderiv, data)) %>%
-    select(!!!syms(grouping), year, derivative, lower, upper) %>%
-    # mutate(variable_adjusted = inverse.link(link.func(variable, link = link) - `s(month)`, link = link)) %>%
-    mutate(signif = !Vectorize(between)(0, lower, upper), # make a logical for significant change
-           sign = sign(derivative)*signif) %>% # calculate sign and replace insignificant signs of derivatives with 0
-    select(-lower, -upper, -derivative) %>%
-    arrange(!!!syms(grouping), year) %>%
-    nest() %>%
-    group_by(!!!syms(grouping)) %>%
-    mutate(
-      periods = map(data, ~ .x %>%
-                      transmute(id = paste0(signif, sign)) %$% # combine sign of significant estimates and significance
-                      id %>% # pass onto
-                      rle() %>% # find lengths of periods with the same values
-                      .$lengths %>% # extract lengths
-                      add(1) %>% # add on to find beginning of each period except first one
-                      .[-length(.)] %>% # remove last one due to being the last rownumber+1
-                      cumsum() %>% # calculate cumulative sums to find the positions
-                      c(1, ., length(.x$sign) - 1) %>% # add the beginning of the first period, and the end of the last one
-                      unique()), # filter out duplicates that may occur from last step
-      data = map2(data, periods, ~ slice(.x, .y))
-    ) %>% # filter out beginnings and ultimate end
-    unnest(cols=c(data, periods)) %>% # each date is now a beginning or the ultimate end
-    mutate(
-      beginning = year,
-      end = lead(year)
-    ) %>% # this puts the next beginning date as the ending of the previous period
-    filter(is.na(end) == F) %>% # filter out NAs, i.e. the last observation
-    select(-periods, -year, -signif) %>% # select out only beginning, end, station, and significant sign of period
-    ungroup() %>%
-    mutate(sign = sign %>% factor(
-      levels = c(-1, 0, 1) %>% rev,
-      labels = c("Decreasing", "None", "Increasing") %>% rev, ordered = T
-    )) -> data#%>%
-  #mutate(date = Vectorize(seq.Date)(from = beginning, to = end - 1, 1)) %>%
-  # unnest(date) %>%
-  # group_by(date) %>%
-  # select(!!!syms(grouping), sign, date) %>%
-  # group_by(!!wrapping) %>%
-  # count(date, sign, .drop = F) %>%
-  # group_by(!!wrapping, date) %>%
-  #mutate(proportion = n / sum(n))
-  # ->
-  #data
-  
-  return(data)
-}
-
-splines_and_derivative <- function(gam_object, n_eval = 200, n_sim = 100, eps = 0.0000001) {
-  number_of_smooths <- gam_object$smooth %>% length()
-  data <- model.frame(gam_object)
-  
-  Vc <- vcov(gam_object,
-             unconditional = TRUE
-  )
-  
-  tibble(id = 1:number_of_smooths) %>%
-    mutate(
-      smooth_obj = map(id, ~ gam_object$smooth[[.x]]),
-      dims = map_dbl(smooth_obj, ~ .$dim)
-    ) %>%
-    filter(dims == 1) %>%
-    mutate(
-      label = map_chr(smooth_obj, ~ .x$label),
-      term = map_chr(smooth_obj, ~ .x$term),
-      by = map_chr(smooth_obj, ~ .x$by),
-      data = map(term, ~ tibble(x = data[[.x]])),
-      #min = map2(smooth_obj, data, ~if(class(.x)%in%"cyclic.smooth"){min(.x$xp)}else{}) ### Jag har gått vilse i koden,
-      #få till gränser för bs="cc"
-      grid = ifelse(by != "NA",
-                    map(data, ~ tibble(x = seq(floor(min(.x[[1]])), ceiling(max(.x[[1]])), length.out = n_eval)) %>% mutate(by = 1)),
-                    map(data, ~ tibble(x = seq(floor(min(.x[[1]])), ceiling(max(.x[[1]])), length.out = n_eval)))),
-      grid = pmap(
-        list(grid, term, by),
-        function(grid, term, by) {
-          if (ncol(grid) == 1) {
-            names(grid) <- term
-          } else {
-            names(grid) <- c(term, by)
-          }
-          return(grid)
-        }
-      ),
-      grid2 = ifelse(by != "NA",
-                     map(data, ~ tibble(x = seq(floor(min(.x[[1]])), ceiling(max(.x[[1]])), length.out = n_eval)) %>% mutate(x = x + eps, by = 1)),
-                     map(data, ~ tibble(x = seq(floor(min(.x[[1]])), ceiling(max(.x[[1]])), length.out = n_eval)) %>% mutate(x = x + eps))
-      ),
-      grid2 = pmap(
-        list(grid2, term, by),
-        function(grid, term, by) {
-          if (ncol(grid) == 1) {
-            names(grid) <- term
-          } else {
-            names(grid) <- c(term, by)
-          }
-          return(grid)
-        }
-      ),
-      first = map_dbl(smooth_obj, ~ .x$first.para),
-      last = map_dbl(smooth_obj, ~ .x$last.para),
-      coefs = map2(first, last, ~ coef(gam_object)[.x:.y]),
-      Vc = map2(first, last, ~ Vc[.x:.y, .x:.y]),
-      Bu = map(Vc, ~ MASS::mvrnorm(
-        n = n_sim,
-        mu = rep(
-          0,
-          nrow(.x)
-        ),
-        Sigma = .x
-      )),
-      knotvalues = map2(smooth_obj, grid, ~ PredictMat(.x, .y)),
-      knotvalues_deriv = map2(smooth_obj, grid2, ~ PredictMat(.x, .y)),
-      knotvalues_deriv = map2(knotvalues, knotvalues_deriv, ~ (.y - .x) / eps),
-      Se = map2(knotvalues, Vc, ~ sqrt(rowSums(.x * (.x %*% .y)))),
-      Se_deriv = map2(knotvalues_deriv, Vc, ~ sqrt(rowSums(.x * (.x %*% .y)))),
-      crit = pmap_dbl(list(knotvalues, Bu, Se), function(Xp, Bu, Se) {
-        quantile(apply(abs((Xp %*% t(Bu)) / Se), 2, max),
-                 type = 8,
-                 prob = 0.95
-        )
-      }),
-      crit_deriv = pmap_dbl(list(knotvalues_deriv, Bu, Se_deriv), function(Xp, Bu, Se) {
-        quantile(apply(abs((Xp %*% t(Bu)) / Se), 2, max),
-                 type = 8,
-                 prob = 0.95
-        )
-      }),
-      est = map2(knotvalues, coefs, ~ .x %*% .y),
-      est_deriv = map2(knotvalues_deriv, coefs, ~ .x %*% .y),
-      error_margin = map2(crit, Se, ~ .x * .y),
-      error_margin_deriv = map2(crit_deriv, Se_deriv, ~ .x * .y),
-      pval = map2(derivative, error_margin, ~ (1 - pnorm(abs(.x / (.y * 0.5102137))))),
-      pval_deriv = map2(est_deriv, error_margin_deriv, ~ (1 - pnorm(abs(.x / (.y * 0.5102137))))),
-      grid = map2(.x = grid, .y = term, ~rename_at(.x, .y, ~"x"))
-    ) %>%
-    unnest(cols=c(grid, Se, Se_deriv, est, est_deriv, error_margin, error_margin_deriv, pval, pval_deriv),
-           names_repair = "universal") %>%
-    mutate(
-      error_margin_point = 1.96 * Se,
-      error_margin_point_deriv = 1.96 * Se_deriv,
-      pval_point = 1 - pnorm(abs(est / (Se))),
-      pval_point_deriv = 1 - pnorm(abs(est_deriv / (Se_deriv)))
-    ) %>%
-    unnest(c(est, pval_point, pval_point_deriv, pval, pval_deriv, est_deriv)) %>%
-    select_if(~!(class(.))%in%"list") ->
-    output
-  
-  
-  class(output) <- c("splines", class(output))
-  return(output)
-}
-
-plot.splines <- function(splines_obj) {
-  deriv_vars <- c(
-    "crit_deriv",
-    "Se_deriv",
-    "est_deriv",
-    "error_margin_deriv",
-    "pval_deriv",
-    "error_margin_point_deriv",
-    "pval_point_deriv"
-  )
-  spline_vars <- c(
-    "crit",
-    "Se",
-    "est",
-    "error_margin",
-    "pval",
-    "error_margin_point",
-    "pval_point"
-  )
-  
-  splines_obj %>%
-    select(-one_of(spline_vars)) %>%
-    rename(
-      crit = crit_deriv,
-      Se = Se_deriv,
-      est = est_deriv,
-      error_margin = error_margin_deriv,
-      pval = pval_deriv,
-      error_margin_point = error_margin_point_deriv,
-      pval_point = pval_point_deriv
-    ) %>%
-    mutate(type = "deriv") %>%
-    select_if(~!(class(.))%in%"list")->
-    deriv_data
-  
-  splines_obj %>%
-    select(-one_of(deriv_vars)) %>%
-    mutate(type = "spline") %>%
-    select_if(~!(class(.))%in%"list")->
-    spline_data
-  
-  spline_data %>%
-    full_join(deriv_data) %>%
-    mutate(type = type %>% factor(levels = c("spline", "deriv"))) %>%
-    ggplot(aes(x = x, y = est)) +
-    geom_line() +
-    facet_wrap(type ~ label, scales = "free", nrow = 2) +
-    geom_ribbon(alpha = 0.4, mapping = aes(ymin = est - error_margin, ymax = est + error_margin)) +
-    geom_ribbon(alpha = 0.3, mapping = aes(ymin = est - error_margin_point, ymax = est + error_margin_point))
-}
 
 
 plot_individual_trend <- function(x, y=NULL, title=NULL){
@@ -874,10 +614,15 @@ plot_individual_trend <- function(x, y=NULL, title=NULL){
   annualterm <- predict(x$fit[[1]], newdata=x$data[[1]], type="terms")[,1]
   intercept <- x$fit[[1]]$coef["(Intercept)"]
   x$fderiv[[1]] %>%
+    mutate(deriv = .derivative, 
+          deriv_se = .se, 
+          lower=.lower_ci, 
+          upper=.upper_ci) %>%
+    select(-year)%>%
     as_tibble %>%
     rowwise %>%
     mutate(signif = !between(0, lower, upper),
-           sign=sign(derivative),
+           sign=sign(deriv),
            signif_sign = signif*sign) %>%
     ungroup %>% bind_cols(x$data[[1]],.) %>%
     mutate(trend = annualterm+intercept) %>%
@@ -894,3 +639,34 @@ plot_individual_trend <- function(x, y=NULL, title=NULL){
     theme(legend.position = "none") -> p
   return(p)
 }
+
+plot_individual_trend_log <- function(x, y=NULL, title=NULL){
+  if(nrow(x) != 1){stop("Filter out the variable (and/or station) you are interested in.")}
+  annualterm <- predict(x$fit[[1]], newdata=x$data[[1]], type="terms")[,1]
+  intercept <- x$fit[[1]]$coef["(Intercept)"]
+  x$fderiv[[1]] %>%
+    mutate(deriv = .derivative, 
+           deriv_se = .se, 
+           lower=.lower_ci, 
+           upper=.upper_ci) %>%
+    select(-year)%>%
+    as_tibble %>%
+    rowwise %>%
+    mutate(signif = !between(0, lower, upper),
+           sign=sign(deriv),
+           signif_sign = signif*sign) %>%
+    ungroup %>% bind_cols(x$data[[1]],.) %>%
+    mutate(trend = annualterm+intercept) %>%
+    drop_na(variable) %>%
+    ggplot(aes(x=year))+geom_line(aes(y=log(variable)))+
+    geom_line(aes(y=trend, color=as_factor(signif_sign), group=c(0)), size=1.5)+
+    scale_color_manual(values=c("-1" = "#56B4E9",
+                                "0" = "#F0E442",
+                                "1" = "#D55E00"))+
+    theme_bw()+
+    theme(text= element_text(size = 20))+
+    labs(x="Date", y=y,title=title)+
+    theme(legend.position = "none") -> p
+  return(p)
+}
+
