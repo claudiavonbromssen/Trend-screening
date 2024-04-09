@@ -140,14 +140,14 @@ screeningmodeling <- function(.data,
                               conf.level=0.95, 
                               tdist = FALSE, # only works with autocor = FALSE
                               beep = FALSE,
-                              ...){ # Variablerna att nesta under (stationsid, etc, ibland variabelnamn om gather är kört)
+                              ...){ # Other variables to nest among e.g. stationid or variable name
   
   nestvars <- enquos(...)
   datevar <- enquo(datevar)
   variable <- enquo(values)
-  #plan(multiprocess, gc = TRUE, workers = parallel::detectCores(logical = F))
+
   plan(multisession)
-  # plan(sequential)
+
   tictoc::tic()
   .data %>%
     mutate(variable = !!variable,
