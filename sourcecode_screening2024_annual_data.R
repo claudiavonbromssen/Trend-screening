@@ -211,9 +211,9 @@ plot_screeningtrends <- function(.output, y_id = NULL, sorting = NULL, wrappingv
                       id %>% # pass onto
                       rle() %>% # find lengths of periods with the same values
                       .$lengths %>% # extract lengths
-                      add(1) %>% # add on to find beginning of each period except first one
                       .[-length(.)] %>% # remove last one due to being the last rownumber+1
                       cumsum() %>% # calculate cumulative sums to find the positions
+                    add(1) %>% # add on to find beginning of each period except first one
                       c(1, ., length(.x$sign)) %>%# add the beginning of the first period, and the end of the last one
                       .[.<=length(.x$sign)]%>%
                       unique()), # filter out duplicates that may occur from last step
@@ -493,9 +493,9 @@ plot_proportions <- function(.output, adjust = FALSE, #station_id = NULL,
                       id %>% # pass onto
                       rle() %>% # find lengths of periods with the same values
                       .$lengths %>% # extract lengths
-                      add(1) %>% # add on to find beginning of each period except first one
                       .[-length(.)] %>% # remove last one due to being the last rownumber+1
                       cumsum() %>% # calculate cumulative sums to find the positions
+                    add(1) %>% # add on to find beginning of each period except first one
                       c(1, ., length(.x$sign) -1) %>% # add the beginning of the first period, and the end of the last one
                       .[.<length(.x$sign)]%>%  #take away indicators that are post end of series
                       unique()), # filter out duplicates that may occur from last step
